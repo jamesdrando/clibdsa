@@ -20,10 +20,4 @@ typedef union {
     f64 f;
 } number;
 
-number x = new(number, x)
-
-
-
-
-
 #endif
