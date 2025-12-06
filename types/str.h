@@ -29,34 +29,110 @@ static inline str newstr(void) {
 // Alias to allow using the new() macro, ie. new(str)
 #define New_str() newstr()
 
-static inline str strf(char *c) {
+static inline str str_from(const char *c) {
     str s = (str)xmalloc(sizeof *s);
     usize len = strlen(c);
-    s->data = c;
+
+    // Copy the string to take ownership of the data
+    s->data = (char*)malloc(len + 1);
+    memcpy(s->data, c, len + 1);
+    
     s->len = len;
     s->cap = len;
     return s;
 }
 
-// Returns a reference to the c str (char *)
-static inline char* cstr(str s) {
+// Returns a the C-String from the data field -> (char *)
+static inline char* str_data(str s) {
     return s->data;
 }
 
-// Destroys the str struct and returns the c str (char *)
-static inline char* destr(str s) {
+// Doesn't care if a str or C-string (char *) is passed, the output is the same -> (char *)
+#define cstr(x) _Generic((x), \
+    str: _str_data(x), \
+    char*: (x), \
+    const char*: (x) \
+)
+
+// Unwraps and destroys the str container, returning the C-String -> (char *)
+static inline char* str_unwrap(str s) {
     char *c = s->data;
     xfree(s);
     return c;
 }
 
-// Needs to be finished
+// Deep clean: Frees wrapper AND data
+static inline void str_free(str s) {
+    if (s->data) xfree(s->data);
+    xfree(s);
+}
+
+// Grow as needed - doubling in size each time.
+static inline void str_grow(str s, usize needed) {
+    // Check if we already have enough space (including null terminator)
+    if (s->len + needed + 1 <= s->cap) {
+        return;
+    }
+
+    usize new_cap = s->cap;
+    while (new_cap < s->len + needed + 1) {
+        new_cap = (new_cap > 0) ? new_cap * 2 : CLIBDSA_DEFAULT_STR_BUFFER;
+    }
+
+    s->data = (char *)xrealloc(s->data, new_cap);
+    s->cap = new_cap;
+}
+
+// Raw C-string append logic
+static inline void str_cat_cstr(str s, const char *append) {
+    if (!append) return;
+    usize len = strlen(append);
+    str_grow(s, len);
+    memcpy(s->data + s->len, append, len);
+    s->len += len;
+    s->data[s->len] = '\0';
+}
+
+// str appended to str
+static inline void str_cat_str(str s, str append) {
+    if (!append) return;
+    str_grow(s, append->len);
+    memcpy(s->data + s->len, append->data, append->len);
+    s->len += append->len;
+    s->data[s->len] = '\0';
+}
+
+// This acts as a switch statement at compile time.
+// If the second argument is a string literal or char*, call _cstr.
+// If the second argument is a 'str' struct, call _str.
+#define str_cat(dest, src) _Generic((src), \
+    char*: str_cat_cstr, \
+    const char*: str_cat_cstr, \
+    str: str_cat_str \
+)(dest, src)
+
+
+// Joins 'n' C-strings together into a new dynamic string
+// Note: When using with str,  you can wrap each argument 
+// in cstr() for safety.
+//
+// Example ------------------------- 
+// str s = str_from("Hello world!");
+// char* cs = "Hey world!";
+// str_join(2, cstr(s), cstr(cs));
 static inline str str_join(int n, ...) {
+    str s = newstr();
+    
     va_list args;
     va_start(args, n);
-    for (int i = 0; i < n; i++)
 
+    for (int i = 0; i < n; i++) {
+        char *arg = va_arg(args, char*);
+        str_cat(s, arg);
+    }
 
+    va_end(args);
+    return s;
 }
 
 #endif /* CLIBDSA_STR_H */
