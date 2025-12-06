@@ -10,14 +10,19 @@
     #define   CLIBDSA_DEFAULT_STR_BUFFER 16
 #endif     /* CLIBDSA_DEFAULT_STR_BUFFER   */
 
+// Container to hold string data
+// O(n) on init / O(1) bounds checking
 typedef struct {
     char *data;
     usize len;
     usize cap;
 } _str;
 
+// For simplicity and uniformity, all _str will exist on the heap.
+// As such, we'll alias the pointer type ergonomically as 'str'
 typedef _str* str;
 
+// New str with default buffer
 static inline str newstr(void) {
     str s = (str)xmalloc(sizeof *s);
     s->data = (char *)xcalloc(CLIBDSA_DEFAULT_STR_BUFFER, 1);
@@ -29,6 +34,7 @@ static inline str newstr(void) {
 // Alias to allow using the new() macro, ie. new(str)
 #define New_str() newstr()
 
+// str from char* - copies data 
 static inline str str_from(const char *c) {
     str s = (str)xmalloc(sizeof *s);
     usize len = strlen(c);
@@ -42,19 +48,19 @@ static inline str str_from(const char *c) {
     return s;
 }
 
-// Returns a the C-String from the data field -> (char *)
+// Returns the char* from the data field.
 static inline char* str_data(str s) {
     return s->data;
 }
 
-// Doesn't care if a str or C-string (char *) is passed, the output is the same -> (char *)
+// str or char* in, char* out.
 #define cstr(x) _Generic((x), \
-    str: _str_data(x), \
+    str: str_data(x), \
     char*: (x), \
     const char*: (x) \
 )
 
-// Unwraps and destroys the str container, returning the C-String -> (char *)
+// Unwraps and destroys the str container.
 static inline char* str_unwrap(str s) {
     char *c = s->data;
     xfree(s);
@@ -83,7 +89,7 @@ static inline void str_grow(str s, usize needed) {
     s->cap = new_cap;
 }
 
-// Raw C-string append logic
+// Raw char* append logic for str
 static inline void str_cat_cstr(str s, const char *append) {
     if (!append) return;
     usize len = strlen(append);
@@ -112,7 +118,8 @@ static inline void str_cat_str(str s, str append) {
 )(dest, src)
 
 
-// Joins 'n' C-strings together into a new dynamic string
+// Joins 'n' strings together into a new dynamic string.
+//
 // Note: When using with str,  you can wrap each argument 
 // in cstr() for safety.
 //
